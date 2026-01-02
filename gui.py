@@ -33,50 +33,34 @@ def _select_points(video_path: str, labels: List[str]) -> Dict[str, Tuple[float,
 
     def on_mouse(event, x, y, _flags, _param):
         nonlocal frame_idx
-        if event == cv2.EVENT_LBUTTONDOWN and len(points) < len(labels):
+        if event == cv2.EVENT_LBUTTONDOWN:
             label = labels[len(points)]
             points[label] = (float(x), float(y))
             print(f"Captured {label} at frame {frame_idx}: {points[label]}")
 
-    window_name = "Calibration"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(window_name, on_mouse)
+    cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback("Calibration", on_mouse)
 
-    while True:
+    while len(points) < len(labels):
         ret, frame = cap.read()
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
         frame_idx = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
         display = frame.copy()
-        if len(points) < len(labels):
-            instruction = f"Step {len(points)+1}/{len(labels)}: Click {labels[len(points)]}"
-        else:
-            instruction = "Calibration complete"
-        cv2.putText(display, instruction, (20, 30),
+        cv2.putText(display, f"Click {labels[len(points)]} (n=next frame, p=prev)", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(display, "Controls: n=next, p=prev, f=+10, b=-10, esc=cancel", (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.imshow(window_name, display)
-        if len(points) >= len(labels):
-            break
+        cv2.imshow("Calibration", display)
         key = cv2.waitKey(0)
         if key in (ord("n"), 83):
             continue
         if key in (ord("p"), 81):
             cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 2))
-        if key == ord("f"):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx + 10)
-        if key == ord("b"):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 11))
         if key == 27:
             break
 
     cap.release()
-    try:
-        cv2.destroyWindow(window_name)
-    except cv2.error:
-        cv2.destroyAllWindows()
+    cv2.destroyWindow("Calibration")
     if len(points) != len(labels):
         raise RuntimeError("Calibration cancelled")
     return points
@@ -89,17 +73,16 @@ def _sample_hsv(video_path: str, label: str, num_samples: int = 5) -> List[np.nd
     samples: List[np.ndarray] = []
 
     def on_mouse(event, x, y, _flags, _param):
-        if event == cv2.EVENT_LBUTTONDOWN and len(samples) < num_samples:
+        if event == cv2.EVENT_LBUTTONDOWN:
             frame = current_frame.copy()
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             samples.append(hsv[y, x].astype(float))
             print(f"{label} sample {len(samples)}: {samples[-1]}")
 
-    window_name = "Sampling"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(window_name, on_mouse)
+    cv2.namedWindow("Sampling", cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback("Sampling", on_mouse)
     current_frame = None
-    while True:
+    while len(samples) < num_samples:
         ret, frame = cap.read()
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -108,24 +91,12 @@ def _sample_hsv(video_path: str, label: str, num_samples: int = 5) -> List[np.nd
         display = frame.copy()
         cv2.putText(display, f"Click {label} samples ({len(samples)}/{num_samples})", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(display, "Controls: n=next, p=prev, esc=cancel", (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.imshow(window_name, display)
-        if len(samples) >= num_samples:
-            break
+        cv2.imshow("Sampling", display)
         key = cv2.waitKey(0)
         if key == 27:
             break
-        if key in (ord("n"), 83):
-            continue
-        if key in (ord("p"), 81):
-            frame_idx = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 2))
     cap.release()
-    try:
-        cv2.destroyWindow(window_name)
-    except cv2.error:
-        cv2.destroyAllWindows()
+    cv2.destroyWindow("Sampling")
     if len(samples) < num_samples:
         raise RuntimeError("Sampling cancelled")
     return samples
@@ -227,12 +198,6 @@ class SoccerGUI:
         if not self.video_path.get():
             messagebox.showerror("Error", "Select a video first")
             return
-        messagebox.showinfo(
-            "Calibration Wizard",
-            "Step through frames and click the four pitch corners in order:\n"
-            "top_left, top_right, bottom_right, bottom_left.\n"
-            "Controls: n=next, p=prev, f=+10, b=-10. Esc cancels.",
-        )
         labels = ["top_left", "top_right", "bottom_right", "bottom_left"]
         self.calibration_points = _select_points(self.video_path.get(), labels)
         messagebox.showinfo("Calibration", "Calibration points captured")
@@ -241,11 +206,6 @@ class SoccerGUI:
         if not self.video_path.get():
             messagebox.showerror("Error", "Select a video first")
             return
-        messagebox.showinfo(
-            "Team/Ref Sampling",
-            "Click a few players for Team A, Team B, and Referee.\n"
-            "Controls: n=next, p=prev. Esc cancels.",
-        )
         samples = {}
         for label in ["team_a", "team_b", "referee"]:
             samples[label] = _sample_hsv(self.video_path.get(), label)

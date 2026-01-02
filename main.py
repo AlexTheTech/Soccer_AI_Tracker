@@ -118,7 +118,7 @@ def process_video(video_path: str,
 
         detections = detector.detect(frame)
         det_tracks = _detection_to_track(detections)
-        tracks = tracker.update(det_tracks, (height, width))
+        tracks = tracker.update(det_tracks)
 
         ball_position_px: Optional[np.ndarray] = None
         player_world_positions: Dict[int, tuple] = {}

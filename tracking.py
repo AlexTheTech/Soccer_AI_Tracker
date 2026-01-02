@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import numpy as np
 
@@ -26,44 +25,34 @@ class Tracker:
         self.fps = fps
         self._tracker = None
         if BYTETracker is not None:
-            try:
-                args = SimpleNamespace(
-                    track_thresh=conf_thres,
-                    track_buffer=int(fps),
-                    match_thresh=0.8,
-                    aspect_ratio_thresh=1.6,
-                    min_box_area=10,
-                    mot20=False,
-                )
-                self._tracker = BYTETracker(args, frame_rate=fps)
-            except TypeError:
-                self._tracker = BYTETracker(
-                    track_thresh=conf_thres,
-                    track_buffer=int(fps),
-                    match_thresh=0.8,
-                    frame_rate=fps,
-                )
+            self._tracker = BYTETracker(
+                track_thresh=conf_thres,
+                track_buffer=int(fps),
+                match_thresh=0.8,
+                frame_rate=fps,
+            )
 
-    def update(self, detections: List[Track], frame_shape: Tuple[int, int]) -> List[Track]:
+    def update(self, detections: List[Track]) -> List[Track]:
         if self._tracker is None:
             return self._simple_update(detections)
         if not detections:
-            self._safe_update(np.empty((0, 5)), frame_shape)
+            self._tracker.update(np.empty((0, 5)), np.empty((0,)))
             return []
 
         dets = np.array([np.append(d.bbox, d.conf) for d in detections], dtype=np.float32)
-        online_targets = self._safe_update(dets, frame_shape)
+        cls_ids = np.array([0 for _ in detections], dtype=np.float32)
+        online_targets = self._tracker.update(dets, cls_ids)
         tracks: List[Track] = []
         for target in online_targets:
             if not hasattr(target, "tlbr"):
                 continue
             bbox = np.array(target.tlbr, dtype=float)
             conf = float(getattr(target, "score", 1.0))
-            cls_name = "player"
-            if len(detections) > 0 and matching is not None:
+            idx = 0
+            if len(detections) > 0:
                 ious = matching.iou_batch(dets[:, :4], bbox[None, :])
                 idx = int(np.argmax(ious))
-                cls_name = detections[idx].cls
+            cls_name = detections[idx].cls if detections else "player"
             tracks.append(Track(track_id=int(target.track_id), bbox=bbox, cls=cls_name, conf=conf))
         return tracks
 
@@ -72,10 +61,3 @@ class Tracker:
         for idx, det in enumerate(detections, start=1):
             tracks.append(Track(track_id=idx, bbox=det.bbox, cls=det.cls, conf=det.conf))
         return tracks
-
-    def _safe_update(self, dets: np.ndarray, frame_shape: Tuple[int, int]):
-        height, width = frame_shape
-        try:
-            return self._tracker.update(dets, (height, width), (height, width))
-        except TypeError:
-            return self._tracker.update(dets, np.empty((0,)), (height, width), (height, width))
