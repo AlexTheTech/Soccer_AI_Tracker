@@ -58,12 +58,6 @@ Team B,Jordan Lee,1,GK,true
 - You can advance frames with `n` and step back with `p`.
 - The resulting homography maps pixel coordinates to meters based on pitch dimensions.
 
-### Partial Pitch Mode
-If the full pitch corners are never visible, switch to **Partial pitch** and choose a side:
-- Left side: click `top_left`, `bottom_left`, `top_mid`, `bottom_mid`
-- Right side: click `top_right`, `bottom_right`, `top_mid`, `bottom_mid`
-This maps the side touchline plus midfield points to world coordinates.
-
 ## Team/Ref Sampling
 - Click a few players for Team A, Team B, and a few referees across any frames.
 - The system computes HSV prototypes and smooths classification.
@@ -84,9 +78,6 @@ Key defaults (adjust in GUI or code):
 - Possession radius: 1.5 m
 - Possession hysteresis: 15 frames
 - Pitch dimensions: 105 x 68 m
-
-## Visualization Options
-- Enable **show_pitch_mask** in the overlay options to verify the pitch mask overlay is tracking the field correctly.
 
 ## Troubleshooting
 - **CUDA not available**: Ensure NVIDIA drivers + CUDA-enabled PyTorch are installed.

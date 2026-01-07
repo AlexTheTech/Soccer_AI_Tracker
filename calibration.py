@@ -39,45 +39,6 @@ def compute_homography(pixel_points: Dict[str, Tuple[float, float]],
     return homography
 
 
-def compute_homography_partial(pixel_points: Dict[str, Tuple[float, float]],
-                               pitch_length_m: float,
-                               pitch_width_m: float,
-                               side: str) -> np.ndarray:
-    if side not in {"left", "right"}:
-        raise ValueError("side must be 'left' or 'right'")
-    required = {f"top_{side}", f"bottom_{side}", "top_mid", "bottom_mid"}
-    if set(pixel_points.keys()) != required:
-        missing = required - set(pixel_points.keys())
-        raise ValueError(f"Missing calibration points: {missing}")
-
-    src = np.array([
-        pixel_points[f"top_{side}"],
-        pixel_points[f"bottom_{side}"],
-        pixel_points["top_mid"],
-        pixel_points["bottom_mid"],
-    ], dtype=np.float32)
-
-    if side == "left":
-        dst = np.array([
-            [0.0, 0.0],
-            [0.0, pitch_width_m],
-            [pitch_length_m / 2.0, 0.0],
-            [pitch_length_m / 2.0, pitch_width_m],
-        ], dtype=np.float32)
-    else:
-        dst = np.array([
-            [pitch_length_m, 0.0],
-            [pitch_length_m, pitch_width_m],
-            [pitch_length_m / 2.0, 0.0],
-            [pitch_length_m / 2.0, pitch_width_m],
-        ], dtype=np.float32)
-
-    homography, _ = cv2.findHomography(src, dst)
-    if homography is None:
-        raise RuntimeError("Failed to compute homography")
-    return homography
-
-
 def pixel_to_world(points: np.ndarray, homography: np.ndarray) -> np.ndarray:
     if points.size == 0:
         return points

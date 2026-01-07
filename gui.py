@@ -20,8 +20,6 @@ class GUIResult:
     match_config: MatchConfig
     overlays: OverlayConfig
     calibration_points: Dict[str, Tuple[float, float]]
-    calibration_mode: str
-    calibration_side: str
     prototypes: Dict[str, List[float]]
     manual_track_map: Dict[int, str]
 
@@ -35,50 +33,34 @@ def _select_points(video_path: str, labels: List[str]) -> Dict[str, Tuple[float,
 
     def on_mouse(event, x, y, _flags, _param):
         nonlocal frame_idx
-        if event == cv2.EVENT_LBUTTONDOWN and len(points) < len(labels):
+        if event == cv2.EVENT_LBUTTONDOWN:
             label = labels[len(points)]
             points[label] = (float(x), float(y))
             print(f"Captured {label} at frame {frame_idx}: {points[label]}")
 
-    window_name = "Calibration"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(window_name, on_mouse)
+    cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback("Calibration", on_mouse)
 
-    while True:
+    while len(points) < len(labels):
         ret, frame = cap.read()
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             continue
         frame_idx = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
         display = frame.copy()
-        if len(points) < len(labels):
-            instruction = f"Step {len(points)+1}/{len(labels)}: Click {labels[len(points)]}"
-        else:
-            instruction = "Calibration complete"
-        cv2.putText(display, instruction, (20, 30),
+        cv2.putText(display, f"Click {labels[len(points)]} (n=next frame, p=prev)", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(display, "Controls: n=next, p=prev, f=+10, b=-10, esc=cancel", (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.imshow(window_name, display)
-        if len(points) >= len(labels):
-            break
+        cv2.imshow("Calibration", display)
         key = cv2.waitKey(0)
         if key in (ord("n"), 83):
             continue
         if key in (ord("p"), 81):
             cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 2))
-        if key == ord("f"):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx + 10)
-        if key == ord("b"):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 11))
         if key == 27:
             break
 
     cap.release()
-    try:
-        cv2.destroyWindow(window_name)
-    except cv2.error:
-        cv2.destroyAllWindows()
+    cv2.destroyWindow("Calibration")
     if len(points) != len(labels):
         raise RuntimeError("Calibration cancelled")
     return points
@@ -91,17 +73,16 @@ def _sample_hsv(video_path: str, label: str, num_samples: int = 5) -> List[np.nd
     samples: List[np.ndarray] = []
 
     def on_mouse(event, x, y, _flags, _param):
-        if event == cv2.EVENT_LBUTTONDOWN and len(samples) < num_samples:
+        if event == cv2.EVENT_LBUTTONDOWN:
             frame = current_frame.copy()
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             samples.append(hsv[y, x].astype(float))
             print(f"{label} sample {len(samples)}: {samples[-1]}")
 
-    window_name = "Sampling"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(window_name, on_mouse)
+    cv2.namedWindow("Sampling", cv2.WINDOW_NORMAL)
+    cv2.setMouseCallback("Sampling", on_mouse)
     current_frame = None
-    while True:
+    while len(samples) < num_samples:
         ret, frame = cap.read()
         if not ret:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -110,24 +91,12 @@ def _sample_hsv(video_path: str, label: str, num_samples: int = 5) -> List[np.nd
         display = frame.copy()
         cv2.putText(display, f"Click {label} samples ({len(samples)}/{num_samples})", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        cv2.putText(display, "Controls: n=next, p=prev, esc=cancel", (20, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.imshow(window_name, display)
-        if len(samples) >= num_samples:
-            break
+        cv2.imshow("Sampling", display)
         key = cv2.waitKey(0)
         if key == 27:
             break
-        if key in (ord("n"), 83):
-            continue
-        if key in (ord("p"), 81):
-            frame_idx = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_idx - 2))
     cap.release()
-    try:
-        cv2.destroyWindow(window_name)
-    except cv2.error:
-        cv2.destroyAllWindows()
+    cv2.destroyWindow("Sampling")
     if len(samples) < num_samples:
         raise RuntimeError("Sampling cancelled")
     return samples
@@ -153,8 +122,6 @@ class SoccerGUI:
         self.calibration_points: Optional[Dict[str, Tuple[float, float]]] = None
         self.prototypes: Optional[Dict[str, List[float]]] = None
         self.manual_map = tk.StringVar(value="")
-        self.calibration_mode = tk.StringVar(value="full")
-        self.partial_side = tk.StringVar(value="left")
 
         self._build()
 
@@ -201,17 +168,6 @@ class SoccerGUI:
         tk.Entry(self.root, textvariable=self.weights, width=50).grid(row=row, column=1, sticky="w")
         row += 1
 
-        tk.Label(self.root, text="Calibration mode").grid(row=row, column=0, sticky="w")
-        tk.Radiobutton(self.root, text="Full pitch (4 corners)", variable=self.calibration_mode,
-                       value="full").grid(row=row, column=1, sticky="w")
-        tk.Radiobutton(self.root, text="Partial pitch (side + midline)", variable=self.calibration_mode,
-                       value="partial").grid(row=row, column=2, sticky="w")
-        row += 1
-        tk.Label(self.root, text="Partial side").grid(row=row, column=0, sticky="w")
-        tk.Radiobutton(self.root, text="Left side", variable=self.partial_side, value="left").grid(row=row, column=1, sticky="w")
-        tk.Radiobutton(self.root, text="Right side", variable=self.partial_side, value="right").grid(row=row, column=2, sticky="w")
-        row += 1
-
         tk.Button(self.root, text="Calibration Wizard", command=self._calibrate).grid(row=row, column=0, sticky="w")
         tk.Button(self.root, text="Team/Ref Sampling", command=self._sample).grid(row=row, column=1, sticky="w")
         row += 1
@@ -242,24 +198,7 @@ class SoccerGUI:
         if not self.video_path.get():
             messagebox.showerror("Error", "Select a video first")
             return
-        if self.calibration_mode.get() == "full":
-            messagebox.showinfo(
-                "Calibration Wizard",
-                "Step through frames and click the four pitch corners in order:\n"
-                "top_left, top_right, bottom_right, bottom_left.\n"
-                "Controls: n=next, p=prev, f=+10, b=-10. Esc cancels.",
-            )
-            labels = ["top_left", "top_right", "bottom_right", "bottom_left"]
-        else:
-            side = self.partial_side.get()
-            messagebox.showinfo(
-                "Calibration Wizard",
-                "Partial pitch mode:\n"
-                f"Click {side} side corners and midfield points in order:\n"
-                f"top_{side}, bottom_{side}, top_mid, bottom_mid.\n"
-                "Controls: n=next, p=prev, f=+10, b=-10. Esc cancels.",
-            )
-            labels = [f"top_{side}", f"bottom_{side}", "top_mid", "bottom_mid"]
+        labels = ["top_left", "top_right", "bottom_right", "bottom_left"]
         self.calibration_points = _select_points(self.video_path.get(), labels)
         messagebox.showinfo("Calibration", "Calibration points captured")
 
@@ -267,11 +206,6 @@ class SoccerGUI:
         if not self.video_path.get():
             messagebox.showerror("Error", "Select a video first")
             return
-        messagebox.showinfo(
-            "Team/Ref Sampling",
-            "Click a few players for Team A, Team B, and Referee.\n"
-            "Controls: n=next, p=prev. Esc cancels.",
-        )
         samples = {}
         for label in ["team_a", "team_b", "referee"]:
             samples[label] = _sample_hsv(self.video_path.get(), label)
@@ -293,7 +227,6 @@ class SoccerGUI:
             "show_distance": tk.BooleanVar(value=self.overlays.show_distance),
             "show_trails": tk.BooleanVar(value=self.overlays.show_trails),
             "show_leaderboard": tk.BooleanVar(value=self.overlays.show_leaderboard),
-            "show_pitch_mask": tk.BooleanVar(value=self.overlays.show_pitch_mask),
         }
         row = 0
         for label, var in vars_map.items():
@@ -341,8 +274,6 @@ class SoccerGUI:
             match_config=match_config,
             overlays=self.overlays,
             calibration_points=self.calibration_points,
-            calibration_mode=self.calibration_mode.get(),
-            calibration_side=self.partial_side.get(),
             prototypes=self.prototypes,
             manual_track_map=manual_map,
         )

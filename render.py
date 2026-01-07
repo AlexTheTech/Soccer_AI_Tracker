@@ -31,13 +31,7 @@ def render_frame(frame: np.ndarray,
                  possession_text: str,
                  time_text: str,
                  trail_history: Dict[int, List[Tuple[int, int]]],
-                 leaderboard: Optional[List[str]] = None,
-                 pitch_mask: Optional[np.ndarray] = None) -> np.ndarray:
-    if overlays.show_pitch_mask and pitch_mask is not None:
-        mask_colored = cv2.cvtColor(pitch_mask, cv2.COLOR_GRAY2BGR)
-        overlay = frame.copy()
-        overlay[mask_colored > 0] = (0, 120, 0)
-        frame = cv2.addWeighted(overlay, 0.3, frame, 0.7, 0)
+                 leaderboard: Optional[List[str]] = None) -> np.ndarray:
     if overlays.show_clock or overlays.show_possession_hud:
         draw_hud(frame, time_text if overlays.show_clock else "",
                  possession_text if overlays.show_possession_hud else "")

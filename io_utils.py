@@ -17,7 +17,6 @@ class OverlayConfig:
     show_distance: bool = True
     show_trails: bool = False
     show_leaderboard: bool = False
-    show_pitch_mask: bool = False
 
 
 @dataclass

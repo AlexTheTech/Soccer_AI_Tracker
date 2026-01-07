@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-from calibration import compute_homography, compute_homography_partial, pixel_to_world
+from calibration import compute_homography, pixel_to_world
 from detection import Detector, Detection
 from gui import SoccerGUI
 from io_utils import (CalibrationResult, MatchConfig, OverlayConfig, ensure_dir,
@@ -71,8 +71,6 @@ def process_video(video_path: str,
                   cfg: MatchConfig,
                   overlays: OverlayConfig,
                   calibration_points: Dict[str, tuple],
-                  calibration_mode: str,
-                  calibration_side: str,
                   prototypes_data: Dict[str, List[float]],
                   manual_map: Dict[int, str]) -> None:
     _check_cuda()
@@ -92,17 +90,10 @@ def process_video(video_path: str,
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     tracker = Tracker(fps=fps, conf_thres=cfg.detection_conf)
-    if calibration_mode == "partial":
-        homography = compute_homography_partial(
-            calibration_points, cfg.pitch_length_m, cfg.pitch_width_m, calibration_side
-        )
-    else:
-        homography = compute_homography(calibration_points, cfg.pitch_length_m, cfg.pitch_width_m)
+    homography = compute_homography(calibration_points, cfg.pitch_length_m, cfg.pitch_width_m)
     save_json(os.path.join(output_dir, "calibration.json"), {
         "pixel_points": calibration_points,
         "homography": homography.tolist(),
-        "mode": calibration_mode,
-        "side": calibration_side,
     })
 
     prototypes = _load_prototypes(prototypes_data)
@@ -127,7 +118,7 @@ def process_video(video_path: str,
 
         detections = detector.detect(frame)
         det_tracks = _detection_to_track(detections)
-        tracks = tracker.update(det_tracks, (height, width))
+        tracks = tracker.update(det_tracks)
 
         ball_position_px: Optional[np.ndarray] = None
         player_world_positions: Dict[int, tuple] = {}
@@ -200,16 +191,7 @@ def process_video(video_path: str,
             sorted_players = sorted(metrics.values(), key=lambda m: m.max_speed_kmh, reverse=True)[:5]
             leaderboard = [f"{m.name or m.track_id} {m.max_speed_kmh:.1f} km/h" for m in sorted_players]
 
-        rendered = render_frame(
-            frame.copy(),
-            overlays,
-            render_tracks,
-            possession_text,
-            time_text,
-            trail_history,
-            leaderboard,
-            pitch_mask=pitch_mask,
-        )
+        rendered = render_frame(frame.copy(), overlays, render_tracks, possession_text, time_text, trail_history, leaderboard)
         writer.write(rendered)
 
         frame_rows.append({
@@ -282,8 +264,6 @@ def main() -> None:
         result.match_config,
         result.overlays,
         result.calibration_points,
-        result.calibration_mode,
-        result.calibration_side,
         result.prototypes,
         result.manual_track_map,
     )
